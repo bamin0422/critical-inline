@@ -21,7 +21,8 @@ export const unpluginCriticalInline = createUnplugin<Options | undefined>((optio
 
   // 정상 경로에서는 buildStart 가 transformIndexHtml 보다 먼저 끝나므로 캐시가 준비돼 있다.
   // 다만 훅 순서를 가정하지 않도록, 아직 비어 있으면 그 자리에서 컴파일한다.
-  // 진행 중 Promise 를 공유해 다중 HTML 주입 시 중복 컴파일을 막는다.
+  // 진행 중 Promise 를 공유해 한 빌드 안에서 HTML 이 여러 개일 때 중복 컴파일을 막는다.
+  // 빌드 간 재사용(watch)은 buildStart 가 캐시를 비워 처리한다.
   async function ensureCompiledEntries(entries: CriticalEntry[]): Promise<Map<string, CompiledCritical>> {
     if (compiledEntries?.size) return compiledEntries;
     compiling ??= compileEntries(entries, {
@@ -35,9 +36,12 @@ export const unpluginCriticalInline = createUnplugin<Options | undefined>((optio
   return {
     name: 'unplugin-critical-inline',
     async buildStart() {
-      if (options.entries?.length) {
-        await ensureCompiledEntries(options.entries);
-      }
+      if (!options.entries?.length) return;
+      // watch 모드처럼 같은 플러그인 인스턴스로 여러 번 빌드될 때 이전 결과가 남으면
+      // 소스 변경이 반영되지 않는다. 빌드 시작마다 캐시를 버리고 새로 컴파일한다.
+      compiledEntries = null;
+      compiling = null;
+      await ensureCompiledEntries(options.entries);
     },
     resolveId(id: string, importer?: string) {
       if (!id.endsWith(SUFFIX)) return undefined;

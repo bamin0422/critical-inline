@@ -90,3 +90,30 @@ describe('vite 자동 head 주입', () => {
     expect(out).toContain('99');
   });
 });
+
+describe('buildStart 재컴파일', () => {
+  it('같은 플러그인 인스턴스로 buildStart 가 다시 불리면 변경된 소스를 다시 컴파일한다', async () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'vrec-')));
+    const entry = join(dir, 'v.critical.ts');
+    writeFileSync(entry, '(window as any).__v = 111;');
+
+    // watch 모드처럼 하나의 인스턴스를 재사용한다.
+    const plugin = criticalVite({ entries: [{ input: entry }] }) as unknown as {
+      buildStart: () => Promise<void>;
+      transformIndexHtml: { handler: (html: string, ctx: unknown) => Promise<string> };
+    };
+    const render = () =>
+      plugin.transformIndexHtml.handler('<html><head></head></html>', { path: '/index.html' });
+
+    await plugin.buildStart();
+    const first = await render();
+    expect(first).toContain('__v=111');
+
+    // 소스를 바꾸고 두 번째 빌드를 시작한다.
+    writeFileSync(entry, '(window as any).__v = 222;');
+    await plugin.buildStart();
+    const second = await render();
+    expect(second).toContain('__v=222');
+    expect(second).not.toContain('__v=111');
+  });
+});
