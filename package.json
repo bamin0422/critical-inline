@@ -1,0 +1,16 @@
+{
+  "name": "critical-inline-monorepo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "tsc -b --noEmit"
+  },
+  "devDependencies": {
+    "@changesets/cli": "2.27.9",
+    "tsup": "8.3.5",
+    "typescript": "5.5.3",
+    "vitest": "2.1.8"
+  }
+}
