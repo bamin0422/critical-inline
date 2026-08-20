@@ -1,6 +1,7 @@
 import { createUnplugin } from 'unplugin';
 import { compileCritical, type CompiledCritical } from 'critical-inline';
 import { dirname, isAbsolute, resolve } from 'node:path';
+import { realpathSync } from 'node:fs';
 import { compileEntries, injectEntriesIntoHtml, type CriticalEntry } from './inject-html';
 
 export interface Options {
@@ -81,7 +82,34 @@ export const unpluginCriticalInline = createUnplugin<Options | undefined>((optio
 
 export const vite = unpluginCriticalInline.vite;
 export const rollup = unpluginCriticalInline.rollup;
-export const webpack = unpluginCriticalInline.webpack;
 export const rspack = unpluginCriticalInline.rspack;
 export const esbuild = unpluginCriticalInline.esbuild;
+
+// webpack(enhanced-resolve) 은 symlinks 옵션 기본값(true)으로 인해 진입점을 해석한 뒤
+// importer 로 넘어오는 경로를 realpath 로 정규화한다(예: macOS `/var` → `/private/var`,
+// pnpm 심볼릭 링크 워크스페이스). 반면 unplugin 의 webpack 어댑터는 `?critical` 처럼 실제
+// 파일로 존재하지 않는 id 를 가상 모듈로 우회 처리할 때, 그 가상 모듈 경로의 접두사를
+// `compiler.options.context` 스냅샷으로 만들어 둔다(unplugin apply() 진입 직후, 우리
+// 플러그인 팩토리가 실행되기도 전에 캡처됨). context 가 realpath 되지 않은 채로 남아있으면
+// 두 경로의 접두사가 서로 달라져(`/var/...` vs `/private/var/...`) 가상 모듈을 등록한 경로와
+// webpack 이 실제로 읽으려는 경로가 어긋나 ENOENT 로 빌드가 실패한다.
+// unplugin 이 VIRTUAL_MODULE_PREFIX 를 캡처하기 전에 개입해야 하므로, factory 내부(buildStart 등)가
+// 아니라 webpack 플러그인 인스턴스의 `apply`를 감싸 compiler 가 넘어오는 즉시(afterEnvironment
+// 훅보다 먼저) context 를 정규화한다.
+export const webpack: typeof unpluginCriticalInline.webpack = (userOptions?: Options) => {
+  const plugin = unpluginCriticalInline.webpack(userOptions);
+  const originalApply = plugin.apply.bind(plugin);
+  plugin.apply = (compiler) => {
+    if (compiler.options.context) {
+      try {
+        compiler.options.context = realpathSync(compiler.options.context);
+      } catch {
+        // no-op: context 가 없거나 realpath 불가(가상 FS 등)하면 원본 값을 그대로 사용한다.
+      }
+    }
+    originalApply(compiler);
+  };
+  return plugin;
+};
+
 export default unpluginCriticalInline;
