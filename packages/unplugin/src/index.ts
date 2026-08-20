@@ -1,7 +1,7 @@
 import { createUnplugin } from 'unplugin';
 import { compileCritical, type CompiledCritical } from 'critical-inline';
 import { dirname, isAbsolute, resolve } from 'node:path';
-import { compileEntries, type CriticalEntry } from './inject-html';
+import { compileEntries, injectEntriesIntoHtml, type CriticalEntry } from './inject-html';
 
 export interface Options {
   maxBytes?: number;
@@ -17,15 +17,26 @@ const SUFFIX = '?critical';
 
 export const unpluginCriticalInline = createUnplugin<Options | undefined>((options = {}) => {
   let compiledEntries: Map<string, CompiledCritical> | null = null;
+  let compiling: Promise<Map<string, CompiledCritical>> | null = null;
+
+  // 정상 경로에서는 buildStart 가 transformIndexHtml 보다 먼저 끝나므로 캐시가 준비돼 있다.
+  // 다만 훅 순서를 가정하지 않도록, 아직 비어 있으면 그 자리에서 컴파일한다.
+  // 진행 중 Promise 를 공유해 다중 HTML 주입 시 중복 컴파일을 막는다.
+  async function ensureCompiledEntries(entries: CriticalEntry[]): Promise<Map<string, CompiledCritical>> {
+    if (compiledEntries?.size) return compiledEntries;
+    compiling ??= compileEntries(entries, {
+      maxBytes: options.maxBytes,
+      onOversize: options.onOversize,
+    });
+    compiledEntries = await compiling;
+    return compiledEntries;
+  }
 
   return {
     name: 'unplugin-critical-inline',
     async buildStart() {
       if (options.entries?.length) {
-        compiledEntries = await compileEntries(options.entries, {
-          maxBytes: options.maxBytes,
-          onOversize: options.onOversize,
-        });
+        await ensureCompiledEntries(options.entries);
       }
     },
     resolveId(id: string, importer?: string) {
@@ -45,6 +56,21 @@ export const unpluginCriticalInline = createUnplugin<Options | undefined>((optio
       const c = await compileCritical(file, { maxBytes: options.maxBytes, onOversize: options.onOversize });
       const mod = { code: c.code, hash: c.hash, bytes: c.bytes };
       return `export default ${JSON.stringify(mod)};`;
+    },
+    // unplugin 은 반환 객체의 `vite` 키를 생성된 Vite 플러그인에 그대로 병합한다.
+    // order: 'post' 라서 Vite 가 번들 스크립트를 넣은 뒤에 실행되고, head-top 주입이
+    // 모듈 스크립트보다 앞자리를 차지한다.
+    vite: {
+      transformIndexHtml: {
+        order: 'post' as const,
+        async handler(html: string, ctx: { filename?: string; path?: string }) {
+          const entries = options.entries;
+          if (!entries?.length) return html;
+          const compiled = await ensureCompiledEntries(entries);
+          const name = ctx.filename ?? ctx.path ?? 'index.html';
+          return injectEntriesIntoHtml(html, name, entries, compiled, options.nonce);
+        },
+      },
     },
   };
 });
