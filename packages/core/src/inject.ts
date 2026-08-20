@@ -21,7 +21,7 @@ export function injectIntoHtml(
   // <head lang="ko"> 처럼 속성이 붙은 경우와 대소문자(<HEAD>)까지 허용한다.
   // replace 콜백을 써서 매치된 태그의 원본 표기를 보존하고, tag 안의 특수문자($&, $1 등)가
   // 치환 패턴으로 해석되는 것을 방지한다.
-  const OPEN_HEAD = /<head[^>]*>/i;
+  const OPEN_HEAD = /<head(?:\s[^>]*)?>/i;
   const CLOSE_HEAD = /<\/head>/i;
   if (position === 'head-top' && OPEN_HEAD.test(html)) {
     return html.replace(OPEN_HEAD, (m) => m + tag);

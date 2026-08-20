@@ -46,4 +46,13 @@ describe('inject', () => {
     expect(out.startsWith('<script')).toBe(true);
     expect(out.endsWith('<div>no head</div>')).toBe(true);
   });
+  it('does not treat <header> as <head> (falls back to prepend)', () => {
+    const out = injectIntoHtml('<header>x</header><main>y</main>', c);
+    expect(out.startsWith('<script')).toBe(true); // no-head fallback prepends the tag
+    expect(out).not.toMatch(/<header><script/); // NOT injected inside <header>
+  });
+  it('matches <HEAD> case-insensitively (head-top)', () => {
+    const out = injectIntoHtml('<HTML><HEAD></HEAD></HTML>', c, { position: 'head-top' });
+    expect(out).toMatch(/<HEAD><script/i);
+  });
 });
