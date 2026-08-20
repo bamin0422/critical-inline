@@ -86,7 +86,7 @@ export const unpluginCriticalInline = createUnplugin<Options | undefined>((optio
         },
       },
     },
-    // html-webpack-plugin 은 optional peer 이므로, 존재하지 않으면 훅을 등록하지 않고 조용히
+    // html-webpack-plugin 은 optional peer 이므로, 존재하지 않으면 훅을 등록하지 않고 경고 후
     // 스킵한다(필수 peer 로 만들면 html-webpack-plugin 을 안 쓰는 webpack 사용자도 설치해야 함).
     // unplugin 의 `webpack` 키는 (compiler) => void 형태로, 반환된 webpack 플러그인의
     // apply() 안에서 호출된다 — Task3 의 apply-wrapper(realpath 정규화)와는 서로 다른 관심사라
@@ -100,6 +100,12 @@ export const unpluginCriticalInline = createUnplugin<Options | undefined>((optio
         HtmlPlugin = require('html-webpack-plugin') as typeof HtmlWebpackPlugin;
       } catch {
         // html-webpack-plugin 이 설치돼 있지 않으면(옵셔널 peer) 자동 주입을 건너뛴다.
+        // entries 를 설정했다는 건 자동 <head> 주입을 기대했다는 뜻이므로, 조용히 무시하지 않고
+        // 경고를 남겨 사용자가 누락된 peer 를 알아챌 수 있게 한다(위 !options.entries?.length
+        // 가드가 이미 통과한 뒤라 이 catch 는 entries 가 실제로 설정된 경우에만 도달한다).
+        console.warn(
+          '[critical-inline] html-webpack-plugin not found; skipping automatic <head> injection.',
+        );
         return;
       }
 
@@ -150,4 +156,11 @@ export const webpack: typeof unpluginCriticalInline.webpack = (userOptions?: Opt
   return plugin;
 };
 
-export default unpluginCriticalInline;
+// `unpluginCriticalInline`(createUnplugin 반환값)의 각 번들러 키는 getter 로 정의돼 있고
+// setter 가 없다 — 이 파일은 ESM(항상 strict mode)이라 `unpluginCriticalInline.webpack = webpack`
+// 처럼 직접 대입하면 "Cannot set property webpack of # which has only a getter" TypeError 가
+// 난다. 그래서 default export 는 원본 객체를 그대로 내보내는 대신, 스프레드로 나머지 번들러
+// 키(esbuild/rollup/vite/rspack/farm/raw 등)는 그대로 옮기고 `webpack` 만 위 realpath
+// 래퍼로 덮어쓴 새 객체를 만든다 — `import u from 'unplugin-critical-inline'; u.webpack(...)`
+// 도 named export `webpack`과 동일하게 realpath 정규화가 적용되게 하기 위함이다.
+export default { ...unpluginCriticalInline, webpack };

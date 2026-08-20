@@ -121,7 +121,7 @@ export default defineConfig({
 
 빌드 결과 `index.html`의 `<head>` 최상단에 압축·이스케이프된 `<script data-critical-hash="…" data-size="…">…</script>`가 인라인됩니다.
 
-**webpack** — `html-webpack-plugin`(옵션 peer, 별도 설치 필요)이 생성하는 HTML의 `beforeEmit` 훅에 주입합니다. 설치돼 있지 않으면 자동 주입은 조용히 스킵되고 `?critical` import 변환만 남습니다.
+**webpack** — `html-webpack-plugin`(옵션 peer, 별도 설치 필요)이 생성하는 HTML의 `beforeEmit` 훅에 주입합니다. 설치돼 있지 않으면 `console.warn`으로 경고를 남긴 뒤 자동 주입을 스킵하고 `?critical` import 변환만 남습니다.
 
 ```js
 // webpack.config.js
