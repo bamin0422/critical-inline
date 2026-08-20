@@ -10,5 +10,5 @@
   "files": ["dist"],
   "scripts": { "build": "tsup", "test": "vitest run" },
   "dependencies": { "unplugin": "1.16.0", "critical-inline": "workspace:*" },
-  "devDependencies": { "vite": "5.3.4", "esbuild": "0.25.4" }
+  "devDependencies": { "@types/node": "22.10.2", "vite": "5.3.4", "esbuild": "0.25.4" }
 }
