@@ -1,8 +1,17 @@
-import { createUnplugin } from 'unplugin';
+import { createUnplugin, type WebpackCompiler } from 'unplugin';
 import { compileCritical, type CompiledCritical } from 'critical-inline';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { realpathSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import type HtmlWebpackPlugin from 'html-webpack-plugin';
 import { compileEntries, injectEntriesIntoHtml, type CriticalEntry } from './inject-html';
+
+// dist 산출물은 ESM 이라 전역 `require` 가 없다(Node 는 ESM 스코프에 require 를 주입하지
+// 않는다). tsup 의 자동 `__require` 셈은 `typeof require`가 항상 "undefined"로 평가돼
+// 매번 throw 하므로 optional peer 를 절대 로드하지 못한다(dist 빌드로 직접 검증함).
+// `createRequire`는 ESM 에서 CJS 모듈을 동기적으로 불러오도록 Node 가 제공하는 정식 방법이라
+// 이 문제를 피한다.
+const require = createRequire(import.meta.url);
 
 export interface Options {
   maxBytes?: number;
@@ -76,6 +85,35 @@ export const unpluginCriticalInline = createUnplugin<Options | undefined>((optio
           return injectEntriesIntoHtml(html, name, entries, compiled, options.nonce);
         },
       },
+    },
+    // html-webpack-plugin 은 optional peer 이므로, 존재하지 않으면 훅을 등록하지 않고 조용히
+    // 스킵한다(필수 peer 로 만들면 html-webpack-plugin 을 안 쓰는 webpack 사용자도 설치해야 함).
+    // unplugin 의 `webpack` 키는 (compiler) => void 형태로, 반환된 webpack 플러그인의
+    // apply() 안에서 호출된다 — Task3 의 apply-wrapper(realpath 정규화)와는 서로 다른 관심사라
+    // 함께 실행돼도 충돌하지 않는다(둘 다 같은 compiler.hooks 에 등록만 할 뿐 서로를 덮어쓰지 않음).
+    webpack(compiler: WebpackCompiler) {
+      const entries = options.entries;
+      if (!entries?.length) return;
+
+      let HtmlPlugin: typeof HtmlWebpackPlugin | undefined;
+      try {
+        HtmlPlugin = require('html-webpack-plugin') as typeof HtmlWebpackPlugin;
+      } catch {
+        // html-webpack-plugin 이 설치돼 있지 않으면(옵셔널 peer) 자동 주입을 건너뛴다.
+        return;
+      }
+
+      compiler.hooks.compilation.tap('critical-inline', (compilation) => {
+        const hooks = HtmlPlugin!.getHooks(compilation);
+        hooks.beforeEmit.tapPromise('critical-inline', async (data) => {
+          // buildStart(rollup/unplugin 라이프사이클 훅)가 webpack 빌드에서도 실행돼
+          // compiledEntries 를 채워두지만, 훅 실행 순서를 가정하지 않기 위해
+          // 비어 있으면 이 자리에서 지연 컴파일한다(compileEntries 로직 재사용).
+          const compiled = await ensureCompiledEntries(entries);
+          data.html = injectEntriesIntoHtml(data.html, data.outputName, entries, compiled, options.nonce);
+          return data;
+        });
+      });
     },
   };
 });
