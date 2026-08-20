@@ -22,4 +22,28 @@ describe('inject', () => {
     const out = injectIntoHtml('<html><head></head></html>', c, { position: 'head-end' });
     expect(out).toMatch(/<\/script><\/head>/);
   });
+  it('head-top: <head lang="ko"> 처럼 속성이 있어도 여는 태그 직후에 주입한다', () => {
+    const out = injectIntoHtml('<!doctype html><html><head lang="ko"></head><body></body></html>', c);
+    expect(out).toMatch(/<head lang="ko"><script/);
+    // 여는 <head> 앞에 주입되어 quirks mode 로 밀리지 않아야 한다.
+    expect(out.startsWith('<!doctype html>')).toBe(true);
+  });
+  it('head-end: <head lang="ko"> 처럼 속성이 있어도 </head> 앞에 주입한다', () => {
+    const out = injectIntoHtml('<html><head lang="ko"></head></html>', c, { position: 'head-end' });
+    expect(out).toMatch(/<\/script><\/head>/);
+    expect(out).toContain('<head lang="ko">');
+  });
+  it('여러 개의 </script> 를 모두 이스케이프한다', () => {
+    expect(escapeScriptBody('a</script>b</script>c')).toBe('a<\\/script>b<\\/script>c');
+  });
+  it('대소문자 무관하게 </SCRIPT> 도 이스케이프한다', () => {
+    const out = escapeScriptBody('a</SCRIPT>b');
+    expect(out).not.toMatch(/<\/script/i); // 살아있는 종료 시퀀스가 없어야 한다
+    expect(out).toContain('<\\/'); // 이스케이프된 형태로 존재
+  });
+  it('<head> 가 전혀 없으면 문서 맨 앞에 붙인다 (fallback)', () => {
+    const out = injectIntoHtml('<div>no head</div>', c);
+    expect(out.startsWith('<script')).toBe(true);
+    expect(out.endsWith('<div>no head</div>')).toBe(true);
+  });
 });

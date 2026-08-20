@@ -48,7 +48,7 @@ React/Next에서 `<CriticalScript>`를 쓰려면 `react`가 필요합니다(`pee
 
 ### (a) Vite / esbuild — `?critical` import
 
-`unplugin-critical-inline`을 번들러 설정에 등록하면, `?critical` 쿼리가 붙은 import가 컴파일된 `{ code, hash, bytes }` 객체(타입: `CriticalModule`, **아직 이스케이프되지 않은 원본 코드**)로 치환됩니다. 이 값을 안전한 인라인 `<script>` 문자열로 만들려면 직접 문자열을 조립하지 말고 코어의 `renderScriptTag`를 쓰세요 — `</script>` 이스케이프와 `data-critical-hash`/`data-size` 속성을 대신 처리해줍니다.
+`unplugin-critical-inline`을 번들러 설정에 등록하면, `?critical` 쿼리가 붙은 import가 컴파일된 `{ code, hash, bytes }` 객체(타입: `CriticalModule`, **아직 이스케이프되지 않은 원본 코드**)로 치환됩니다. 클라이언트에서 이 코드를 **실제로 실행**시키려면 `<script>` 엘리먼트를 직접 만들어 `textContent`에 `critical.code`를 넣으세요 — `insertAdjacentHTML`/`innerHTML`로 삽입한 `<script>`는 브라우저가 실행하지 않습니다. (서버에서 HTML 문자열을 조립하는 경우라면 코어의 `renderScriptTag`를 쓰세요 — `</script>` 이스케이프와 `data-critical-hash`/`data-size` 속성을 대신 처리해줍니다.)
 
 > **정직한 한계**: 이 MVP는 Vite/webpack의 빌드타임 `index.html` 자동 주입(`transformIndexHtml`/`HtmlWebpackPlugin`)을 제공하지 않습니다. 아래처럼 앱 코드(`main.ts`) 안에서 스크립트 태그를 만들어 삽입하면 그 코드는 **메인 번들의 일부로 실행**됩니다 — 메인 번들보다 먼저 실행되는 것을 보장하지 않습니다. 진짜로 메인 번들 이전 실행이 필요하다면 (c) 순수 HTML 빌드타임 주입 패턴을 쓰세요.
 
@@ -69,10 +69,13 @@ export default defineConfig({
 
 ```ts
 // main.ts
-import { renderScriptTag } from 'critical-inline';
 import homeCritical from './home.critical?critical'; // { code, hash, bytes }
 
-document.head.insertAdjacentHTML('afterbegin', renderScriptTag(homeCritical));
+// insertAdjacentHTML/innerHTML 로 넣은 <script> 는 실행되지 않는다.
+// script 엘리먼트를 만들어 textContent 에 코드를 넣어야 실제로 실행된다.
+const s = document.createElement('script');
+s.textContent = homeCritical.code; // 컴파일된 IIFE 본문
+document.head.prepend(s);
 ```
 
 esbuild를 직접 쓰는 경우도 동일한 패턴이며, `vite` 대신 `esbuild` export만 바꿔주면 됩니다.

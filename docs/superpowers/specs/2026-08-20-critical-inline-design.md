@@ -48,7 +48,6 @@ interface CompileOptions {
   onOversize?: 'error' | 'warn';     // 기본 'error'
   minify?: boolean;                  // 기본 true
   define?: Record<string, string>;   // esbuild define 주입
-  nonce?: string;                    // CSP nonce 속성
 }
 
 interface CompiledCritical {
@@ -65,7 +64,7 @@ function compileCritical(input: string, opts?: CompileOptions): Promise<Compiled
 function injectIntoHtml(
   html: string,
   compiled: CompiledCritical,
-  opts?: { position?: 'head-top' | 'head-end'; attrs?: Record<string, string> }
+  opts?: { position?: 'head-top' | 'head-end'; nonce?: string }
 ): string;
 
 // 인라인용 <script> 태그 문자열만 생성 (컴포넌트/수동 삽입용)

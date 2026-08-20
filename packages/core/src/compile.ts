@@ -19,7 +19,11 @@ export async function compileCritical(
     define,
     logLevel: 'silent',
   });
-  const code = result.outputFiles[0].text.trim();
+  const output = result.outputFiles[0];
+  if (!output) {
+    throw new Error(`critical script "${input}" produced no esbuild output`);
+  }
+  const code = output.text.trim();
   const bytes = Buffer.byteLength(code, 'utf8');
   const hash = createHash('sha256').update(code).digest('hex').slice(0, 8);
   const warnings: string[] = [];
