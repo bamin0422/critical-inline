@@ -7,22 +7,39 @@
     "node": ">=18"
   },
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
-    "./next": { "types": "./dist/next.d.ts", "import": "./dist/next.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./next": {
+      "types": "./dist/next.d.ts",
+      "import": "./dist/next.js"
+    }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "test": "vitest run"
   },
-  "dependencies": { "esbuild": "0.25.4" },
-  "peerDependencies": { "react": ">=18" },
-  "peerDependenciesMeta": { "react": { "optional": true } },
+  "dependencies": {
+    "esbuild": "0.25.4"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
   "devDependencies": {
-    "@types/node": "22.10.2",
-    "react": "19.2.5",
     "@testing-library/react": "16.1.0",
+    "@types/node": "22.10.2",
     "@types/react": "19.2.14",
-    "jsdom": "25.0.1"
+    "jsdom": "25.0.1",
+    "react": "19.2.5",
+    "react-dom": "19.2.5"
   }
 }
