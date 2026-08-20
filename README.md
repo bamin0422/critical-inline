@@ -34,15 +34,15 @@ React/Next에서 `<CriticalScript>`를 쓰려면 `react`가 필요합니다(`pee
 
 | 대상 | 사용 방법 | 상태 |
 | --- | --- | --- |
-| Vite | `unplugin-critical-inline`의 `vite` export | 통합 테스트 완료 |
-| esbuild | `unplugin-critical-inline`의 `esbuild` export | 통합 테스트 완료 |
-| webpack | `unplugin-critical-inline`의 `webpack` export | unplugin이 생성하는 표준 어댑터(이 레포 안에서 통합 테스트는 아직 없음) |
-| Rollup | `unplugin-critical-inline`의 `rollup` export | 위와 동일 |
-| Rspack | `unplugin-critical-inline`의 `rspack` export | 위와 동일 |
+| Vite | `unplugin-critical-inline`의 `vite` export | `?critical` import 변환 + **자동 `<head>` 주입**(`entries` 옵션) 통합 테스트 완료 |
+| esbuild | `unplugin-critical-inline`의 `esbuild` export | `?critical` import 변환 통합 테스트 완료(자동 `<head>` 주입은 미지원) |
+| webpack | `unplugin-critical-inline`의 `webpack` export | `?critical` import 변환 + **자동 `<head>` 주입**(`entries` 옵션, `html-webpack-plugin` 필요) 통합 테스트 완료 |
+| Rollup | `unplugin-critical-inline`의 `rollup` export | `?critical` import 변환 통합 테스트 완료(자동 `<head>` 주입은 미지원) |
+| Rspack | `unplugin-critical-inline`의 `rspack` export | webpack과 동일한 unplugin 어댑터(webpack 호환) — 이 레포 안에서 통합 테스트는 아직 없음 |
 | Next.js | `critical-inline/next`의 `<CriticalScript>` (+ 빌드타임 프리컴파일) | 컴포넌트 렌더 테스트 완료 |
 | 순수 HTML / 커스텀 빌드 파이프라인(dop-do-front 패턴) | `critical-inline`의 `compileCritical` + `injectIntoHtml` 직접 호출 | 단위 테스트 완료 |
 
-> Vite/esbuild/webpack/Rollup/Rspack 어댑터는 `?critical` import를 컴파일된 모듈로 바꿔줄 뿐, HTML `<head>`에 자동으로 주입하지는 않습니다(Vite `transformIndexHtml`/webpack `HtmlWebpackPlugin` 자동 주입은 2차 확장 예정 — 계획 밖). 빌드타임 `<head>` 자동 주입이 필요하면 Next(`<CriticalScript>`) 또는 순수 HTML 패턴(`injectIntoHtml`)을 쓰세요.
+> Vite·webpack 어댑터는 `entries` 옵션을 주면 빌드타임에 HTML `<head>`에 자동으로 주입합니다(Vite는 `transformIndexHtml`, webpack은 `html-webpack-plugin`의 `beforeEmit` 훅 경유 — 아래 "자동 `<head>` 주입" 절 참고). `entries`를 생략하면(esbuild/Rollup/Rspack은 항상) 기존처럼 `?critical` import 변환만 수행하고 HTML은 건드리지 않습니다 — 이 경우 자동 주입이 필요하면 Next(`<CriticalScript>`) 또는 순수 HTML 패턴(`injectIntoHtml`)을 쓰세요.
 
 ## 사용 예제
 
@@ -50,7 +50,7 @@ React/Next에서 `<CriticalScript>`를 쓰려면 `react`가 필요합니다(`pee
 
 `unplugin-critical-inline`을 번들러 설정에 등록하면, `?critical` 쿼리가 붙은 import가 컴파일된 `{ code, hash, bytes }` 객체(타입: `CriticalModule`, **아직 이스케이프되지 않은 원본 코드**)로 치환됩니다. 클라이언트에서 이 코드를 **실제로 실행**시키려면 `<script>` 엘리먼트를 직접 만들어 `textContent`에 `critical.code`를 넣으세요 — `insertAdjacentHTML`/`innerHTML`로 삽입한 `<script>`는 브라우저가 실행하지 않습니다. (서버에서 HTML 문자열을 조립하는 경우라면 코어의 `renderScriptTag`를 쓰세요 — `</script>` 이스케이프와 `data-critical-hash`/`data-size` 속성을 대신 처리해줍니다.)
 
-> **정직한 한계**: 이 MVP는 Vite/webpack의 빌드타임 `index.html` 자동 주입(`transformIndexHtml`/`HtmlWebpackPlugin`)을 제공하지 않습니다. 아래처럼 앱 코드(`main.ts`) 안에서 스크립트 태그를 만들어 삽입하면 그 코드는 **메인 번들의 일부로 실행**됩니다 — 메인 번들보다 먼저 실행되는 것을 보장하지 않습니다. 진짜로 메인 번들 이전 실행이 필요하다면 (c) 순수 HTML 빌드타임 주입 패턴을 쓰세요.
+> **정직한 한계**: 이 `?critical` import 패턴 자체는 빌드타임 `index.html` 자동 주입을 하지 않습니다 — 그건 아래 "자동 `<head>` 주입" 절에서 다루는 `entries` 옵션 기반의 별도 기능입니다. 여기 (a)처럼 앱 코드(`main.ts`) 안에서 스크립트 태그를 만들어 삽입하면 그 코드는 **메인 번들의 일부로 실행**됩니다 — 메인 번들보다 먼저 실행되는 것을 보장하지 않습니다. 진짜로 메인 번들 이전 실행이 필요하다면 아래 "자동 `<head>` 주입"(Vite/webpack) 또는 (c) 순수 HTML 빌드타임 주입 패턴을 쓰세요.
 
 ```ts
 // vite.config.ts
@@ -92,6 +92,52 @@ await build({
   plugins: [criticalEsbuild({ maxBytes: 8192 })],
 });
 ```
+
+### (a-1) 자동 `<head>` 주입 (Vite / webpack) — `entries` 옵션
+
+`?critical` import 대신, `Options.entries`를 넘기면 Vite·webpack 어댑터가 **빌드 시점에 지정한 HTML 파일의 `<head>`에 컴파일된 크리티컬 스크립트를 직접 인라인**합니다. 앱 코드에서 `<script>` 엘리먼트를 만들어 삽입할 필요가 없고, 메인 번들 스크립트보다 앞에 오는 것도 보장됩니다((a)의 `?critical` import 패턴과 달리 실제 HTML 파일 자체가 바뀝니다).
+
+```ts
+interface CriticalEntry {
+  input: string; // 컴파일할 크리티컬 TS 엔트리 경로
+  injectInto?: string[]; // 대상 HTML 파일명(끝 문자열 매칭). 생략 시 모든 HTML에 주입
+  position?: 'head-top' | 'head-end'; // 기본 'head-top'
+}
+```
+
+**Vite** — `transformIndexHtml`을 통해 `vite build`(및 `vite dev`)가 만드는 `index.html`에 주입합니다.
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite';
+import { vite as criticalInline } from 'unplugin-critical-inline';
+
+export default defineConfig({
+  plugins: [
+    criticalInline({ entries: [{ input: 'src/gw.critical.ts', injectInto: ['index.html'] }] }),
+  ],
+});
+```
+
+빌드 결과 `index.html`의 `<head>` 최상단에 압축·이스케이프된 `<script data-critical-hash="…" data-size="…">…</script>`가 인라인됩니다.
+
+**webpack** — `html-webpack-plugin`(옵션 peer, 별도 설치 필요)이 생성하는 HTML의 `beforeEmit` 훅에 주입합니다. 설치돼 있지 않으면 자동 주입은 조용히 스킵되고 `?critical` import 변환만 남습니다.
+
+```js
+// webpack.config.js
+import HtmlWebpackPlugin from 'html-webpack-plugin';
+import { webpack as criticalInline } from 'unplugin-critical-inline';
+
+export default {
+  // ...
+  plugins: [
+    new HtmlWebpackPlugin(),
+    criticalInline({ entries: [{ input: 'src/gw.critical.ts', injectInto: ['index.html'] }] }),
+  ],
+};
+```
+
+두 어댑터 모두 최상위 `nonce` 옵션을 함께 지원합니다(`criticalInline({ entries: [...], nonce: 'n-abc' })` → 주입된 `<script>`에 `nonce="n-abc"`가 붙습니다). `entries`를 넘기지 않으면 두 어댑터 모두 (a)처럼 `?critical` import 변환만 수행하고 HTML은 건드리지 않습니다(하위 호환). esbuild/Rollup/Rspack 어댑터는 아직 `entries` 자동 주입을 지원하지 않습니다.
 
 ### (b) Next.js — `<CriticalScript>`
 
@@ -178,8 +224,10 @@ writeFileSync('dist/contentViewer.html', html);
 
 | export | 설명 |
 | --- | --- |
-| `default` / `vite` / `rollup` / `webpack` / `rspack` / `esbuild` | [unplugin](https://github.com/unjs/unplugin) 팩토리로 생성된 번들러별 플러그인. `import x from './foo.critical?critical'`을 `compileCritical` 결과(`{ code, hash, bytes }`)로 치환. |
-| `Options` | `{ maxBytes?: number; onOversize?: 'error' \| 'warn' }`. |
+| `default` / `vite` / `rollup` / `webpack` / `rspack` / `esbuild` | [unplugin](https://github.com/unjs/unplugin) 팩토리로 생성된 번들러별 플러그인. `import x from './foo.critical?critical'`을 `compileCritical` 결과(`{ code, hash, bytes }`)로 치환. `vite`/`webpack`은 `entries`를 주면 추가로 HTML `<head>` 자동 주입도 수행. |
+| `Options` | `{ maxBytes?: number; onOversize?: 'error' \| 'warn'; entries?: CriticalEntry[]; nonce?: string }`. `entries`/`nonce`는 Vite·webpack의 자동 `<head>` 주입 전용(위 (a-1) 절 참고). |
+| `CriticalEntry` | `{ input: string; injectInto?: string[]; position?: 'head-top' \| 'head-end' }`. `entries` 배열의 원소 타입. |
+| `compileEntries` / `injectEntriesIntoHtml` | `entries` 컴파일·HTML 주입에 쓰는 하위 헬퍼(직접 export도 됨) — 커스텀 통합(예: 아직 자동 주입이 없는 Rspack에 수동으로 연결)에 활용 가능. |
 
 ## 에러 처리 / 안전장치
 

@@ -24,11 +24,11 @@ pnpm add -D unplugin-critical-inline
 
 | export | 번들러 | 상태 |
 | --- | --- | --- |
-| `vite` | Vite | 통합 테스트 완료(`test/vite.test.ts`) |
-| `esbuild` | esbuild | 통합 테스트 완료(`test/esbuild.test.ts`) |
-| `webpack` | webpack | unplugin이 생성하는 표준 어댑터(이 패키지 안에서 통합 테스트는 아직 없음) |
-| `rollup` | Rollup | 위와 동일 |
-| `rspack` | Rspack | 위와 동일 |
+| `vite` | Vite | `?critical` 변환 + 자동 `<head>` 주입(`entries`) 통합 테스트 완료(`test/vite.test.ts`, `test/vite-inject.test.ts`) |
+| `esbuild` | esbuild | `?critical` 변환 통합 테스트 완료(`test/esbuild.test.ts`). 자동 `<head>` 주입 미지원 |
+| `webpack` | webpack | `?critical` 변환 + 자동 `<head>` 주입(`entries`, `html-webpack-plugin` 필요) 통합 테스트 완료(`test/webpack.test.ts`, `test/webpack-inject.test.ts`) |
+| `rollup` | Rollup | `?critical` 변환 통합 테스트 완료(`test/rollup.test.ts`). 자동 `<head>` 주입 미지원 |
+| `rspack` | Rspack | webpack과 동일한 unplugin 어댑터(webpack 호환) — 이 패키지 안에서 통합 테스트는 아직 없음 |
 | `default` | 위 전체를 담은 unplugin 팩토리 | — |
 
 ## 사용
@@ -81,12 +81,51 @@ import { rspack as criticalRspack } from 'unplugin-critical-inline';
 
 각각 `rollup.config.js`의 `plugins`, Rspack 설정의 `plugins`에 그대로 등록하면 됩니다.
 
+### 자동 `<head>` 주입 (Vite / webpack) — `entries`
+
+`?critical` import 대신 `entries`를 넘기면, Vite·webpack 어댑터가 빌드 시점에 지정한 HTML의 `<head>`에 컴파일된 크리티컬 스크립트를 직접 인라인합니다.
+
+```ts
+// vite.config.ts
+import { defineConfig } from 'vite';
+import { vite as criticalInline } from 'unplugin-critical-inline';
+
+export default defineConfig({
+  plugins: [
+    criticalInline({ entries: [{ input: 'src/gw.critical.ts', injectInto: ['index.html'] }] }),
+  ],
+});
+```
+
+```js
+// webpack.config.js — html-webpack-plugin은 optional peer, 별도 설치 필요
+import HtmlWebpackPlugin from 'html-webpack-plugin';
+import { webpack as criticalInline } from 'unplugin-critical-inline';
+
+export default {
+  plugins: [
+    new HtmlWebpackPlugin(),
+    criticalInline({ entries: [{ input: 'src/gw.critical.ts', injectInto: ['index.html'] }] }),
+  ],
+};
+```
+
+`entries`를 넘기지 않으면 두 어댑터 모두 기존처럼 `?critical` import 변환만 수행합니다(하위 호환). esbuild/Rollup/Rspack은 아직 `entries` 자동 주입을 지원하지 않습니다. 자세한 내용은 [루트 README의 "자동 `<head>` 주입" 절](../../README.md)을 참고하세요.
+
 ## Options
 
 ```ts
 interface Options {
   maxBytes?: number;               // compileCritical로 전달. 기본 8192
   onOversize?: 'error' | 'warn';   // compileCritical로 전달. 기본 'error'
+  entries?: CriticalEntry[];       // 지정 시 vite/webpack 어댑터가 자동 <head> 주입 수행
+  nonce?: string;                  // entries 자동 주입 시 <script nonce="…">에 반영
+}
+
+interface CriticalEntry {
+  input: string;              // 컴파일할 크리티컬 TS 엔트리 경로
+  injectInto?: string[];      // 대상 HTML 파일명(끝 문자열 매칭). 생략 시 모든 HTML
+  position?: 'head-top' | 'head-end'; // 기본 'head-top'
 }
 ```
 
